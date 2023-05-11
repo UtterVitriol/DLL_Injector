@@ -2,8 +2,10 @@
 using System.Collections.Generic;
 using System.Diagnostics.Contracts;
 using System.Linq;
+using System.Runtime.ConstrainedExecution;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
+using System.Security;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -84,6 +86,22 @@ namespace Injector
         [DllImport("kernel32", CharSet = CharSet.Ansi, ExactSpelling = true, SetLastError = true)]
         static extern IntPtr GetProcAddress(IntPtr hModule, string procName);
 
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [SuppressUnmanagedCodeSecurity]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        static extern bool CloseHandle(IntPtr hObject);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern bool GetExitCodeThread(IntPtr hThread, out uint lpExitCode);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern UInt32 WaitForSingleObject(IntPtr hHandle, UInt32 dwMilliseconds);
+        const UInt32 INFINITE = 0xFFFFFFFF;
+        const UInt32 WAIT_ABANDONED = 0x00000080;
+        const UInt32 WAIT_OBJECT_0 = 0x00000000;
+        const UInt32 WAIT_TIMEOUT = 0x00000102;
+
+
         public static void Inject(IntPtr pid, string dll)
         {
             IntPtr hProc = OpenProcess(0x1FFFFF, false, (uint)pid.ToInt32());
@@ -99,7 +117,30 @@ namespace Injector
             var LoadLibrary = GetProcAddress(GetModuleHandle("kernel32.dll"), "LoadLibraryA");
 
             IntPtr tID = IntPtr.Zero;
-            var hThread = CreateRemoteThread(hProc, (IntPtr)0, 0, LoadLibrary, loc, 0, out tID);
+            IntPtr hThread = CreateRemoteThread(hProc, (IntPtr)0, 0, LoadLibrary, loc, 0, out tID);
+
+            string message = "Failed";
+
+            if(WAIT_OBJECT_0 == WaitForSingleObject(hThread, INFINITE))
+            {
+                uint exitCode = 0;
+                GetExitCodeThread(hThread, out exitCode);
+
+                if (exitCode == 0)
+                {
+                    message = "Injection: Failure";
+                }
+                else
+                {
+                    message = "Injection: Success";
+                }
+            }
+
+
+            MessageBox.Show(message);
+
+            CloseHandle(hThread);
+
         }
     }
 }

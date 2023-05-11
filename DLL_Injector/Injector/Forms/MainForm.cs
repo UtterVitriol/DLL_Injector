@@ -1,3 +1,5 @@
+using System;
+using System.ComponentModel;
 using System.Data;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -25,6 +27,9 @@ namespace Injector
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, uint processId);
 
+        [DllImport("Kernel32.dll")]
+        private static extern bool QueryFullProcessImageName([In] IntPtr hProcess, [In] uint dwFlags, [Out] StringBuilder lpExeName, [In, Out] ref uint lpdwSize);
+
         private void RefreshProcesses()
         {
             var dt = new DataTable();
@@ -38,27 +43,20 @@ namespace Injector
                 var row = dt.NewRow();
                 row["Process"] = p.ProcessName + ".exe";
                 row["PID"] = (IntPtr)p.Id;
-                //row["Path"] = "beans";
-                IntPtr hProc = OpenProcess(0x1FFFFF, false, (uint)p.Id);
-                if (hProc != IntPtr.Zero)
-                {
-                    var path = new StringBuilder(1024);
-                    var len = GetModuleFileName(hProc, path, 1024);
-                    if (len > 0)
-                    {
-                        row["Path"] = path;
-                    }
-                    else
-                    {
-                        row["Path"] = Marshal.GetLastWin32Error();
 
-                    }
+                IntPtr hProc = OpenProcess(0x1FFFFF, false, (uint)p.Id);
+
+                var fileNameBuilder = new StringBuilder(1024);
+                uint bufferLength = (uint)fileNameBuilder.Capacity + 1;
+                if (QueryFullProcessImageName(hProc, 0, fileNameBuilder, ref bufferLength))
+                {
+                    row["Path"] = fileNameBuilder.ToString();
                 }
                 else
                 {
-                    row["Path"] = "Beans";
+                    row["Path"] = new Win32Exception(Marshal.GetLastWin32Error()).Message;
                 }
-                //row["Path"] = GetMainModuleFilepath(p.Id);
+
                 dt.Rows.Add(row);
             }
 
@@ -106,6 +104,7 @@ namespace Injector
         private void button1_Click(object sender, EventArgs e)
         {
             RefreshProcesses();
+            ApplyFilter();
         }
     }
 
