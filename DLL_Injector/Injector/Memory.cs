@@ -65,6 +65,25 @@ namespace Injector
             NoCacheModifierflag = 0x200,
             WriteCombineModifierflag = 0x400
         }
+
+        [Flags]
+        public enum ProcessAccessFlags : uint
+        {
+            All = 0x001F0FFF,
+            Terminate = 0x00000001,
+            CreateThread = 0x00000002,
+            VirtualMemoryOperation = 0x00000008,
+            VirtualMemoryRead = 0x00000010,
+            VirtualMemoryWrite = 0x00000020,
+            DuplicateHandle = 0x00000040,
+            CreateProcess = 0x000000080,
+            SetQuota = 0x00000100,
+            SetInformation = 0x00000200,
+            QueryInformation = 0x00000400,
+            QueryLimitedInformation = 0x00001000,
+            Synchronize = 0x00100000
+        }
+
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, uint processId);
 
@@ -101,10 +120,9 @@ namespace Injector
         const UInt32 WAIT_OBJECT_0 = 0x00000000;
         const UInt32 WAIT_TIMEOUT = 0x00000102;
 
-
         public static void Inject(IntPtr pid, string dll)
         {
-            IntPtr hProc = OpenProcess(0x1FFFFF, false, (uint)pid.ToInt32());
+            IntPtr hProc = OpenProcess((uint)ProcessAccessFlags.All, false, (uint)pid.ToInt32());
             if (hProc == IntPtr.Zero)
             {
                 return;
@@ -112,12 +130,30 @@ namespace Injector
             IntPtr MAX_PATH = new IntPtr(260);
             IntPtr bWritten = IntPtr.Zero;
             var loc = VirtualAllocEx(hProc, (IntPtr)0, MAX_PATH, AllocationType.Commit | AllocationType.Reserve, MemoryProtection.ReadWrite);
-            WriteProcessMemory(hProc, loc, dll, dll.Length + 1, out bWritten);
+            if(loc == IntPtr.Zero)
+            {
+                return;
+            }
+
+            if(false == WriteProcessMemory(hProc, loc, dll, dll.Length + 1, out bWritten))
+            {
+                return;
+            }
 
             var LoadLibrary = GetProcAddress(GetModuleHandle("kernel32.dll"), "LoadLibraryA");
 
+            if (LoadLibrary == IntPtr.Zero)
+            {
+                return;
+            }
+
             IntPtr tID = IntPtr.Zero;
             IntPtr hThread = CreateRemoteThread(hProc, (IntPtr)0, 0, LoadLibrary, loc, 0, out tID);
+
+            if(hThread == IntPtr.Zero)
+            {
+                return;
+            }
 
             string message = "Failed";
 
@@ -128,7 +164,7 @@ namespace Injector
 
                 if (exitCode == 0)
                 {
-                    message = "Injection: Failure";
+                    message = "Injection: Failure" + bWritten;
                 }
                 else
                 {
