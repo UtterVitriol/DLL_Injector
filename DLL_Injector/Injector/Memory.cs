@@ -38,11 +38,20 @@ namespace Injector
     {
         
         [DllImport("./injectionLib.dll")]
-        static extern void inject(string dllPath, IntPtr procId);
+        static extern uint inject(string dllPath, IntPtr procId);
 
         public static void Inject(IntPtr pid, string dll)
         {
-            inject(dll, pid);
+            uint err = inject(dll, pid);
+
+            if (err != 0)
+            {
+                MessageBox.Show("Injection Failure: Error " + err);
+            }
+            else
+            {
+                MessageBox.Show("Injection Success");
+            }
 
         }
     }

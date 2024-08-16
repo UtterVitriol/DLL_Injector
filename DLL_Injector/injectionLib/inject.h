@@ -4,5 +4,5 @@
 
 extern "C" {
 	__declspec (dllexport)
-		void inject(char* dllPath, DWORD procId);
+		DWORD inject(char* dllPath, DWORD procId);
 }
